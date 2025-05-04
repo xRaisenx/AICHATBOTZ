@@ -1,15 +1,14 @@
 // app/api/products/sync/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+// Import vectorIndex and standard redis client
 import { vectorIndex, UPSTASH_VECTOR_INDEX_NAME } from '@/lib/redis';
-// Removed unused ShopifyProductNode import as it's defined in lib/shopify.ts
 import { fetchShopifyProducts } from '@/lib/shopify';
 import { generateEmbedding } from '@/lib/gemini';
-// Import only if using HSET separately
-// import { redis, REDIS_PRODUCT_KEY_PREFIX } from '@/lib/redis';
+// No need for UpsertRequest import
 
 // Define the metadata structure to store alongside the vector
 interface ProductVectorMetadata {
-    [key: string]: any; // Index signature for compatibility
+    [key: string]: unknown;
     id: string;
     handle: string;
     title: string;
@@ -20,12 +19,6 @@ interface ProductVectorMetadata {
     productType?: string | null;
     tags?: string;
 }
-
-// Optional: Structure for storing full details in a separate HASH
-// interface ProductHashData extends ProductVectorMetadata {
-//     description: string;
-// }
-
 
 export async function GET(req: NextRequest) {
     // --- Security Check ---
@@ -47,20 +40,21 @@ export async function GET(req: NextRequest) {
     let nextPageCursor: string | null = null;
     const startTime = Date.now();
     const BATCH_SIZE_SHOPIFY = 50;
-    const BATCH_SIZE_VECTOR = 100;
+    const BATCH_SIZE_VECTOR = 100; // Batch size for Upstash Vector upsert
 
+    // Type for the batch array - this remains the same, using our interface
     const vectorUpsertBatch: {
-        id: string | number;
-        data: string; // Text to be embedded by Upstash
-        metadata: ProductVectorMetadata;
+        id: string | number; // Vector ID can be string or number
+        vector: number[];
+        metadata: ProductVectorMetadata; // Use our interface here
     }[] = [];
 
     // Optional: Store hash set promises for batching
-    // const hashSetPromises: Promise<unknown>[] = []; // Use unknown instead of any
+    // const hashSetPromises: Promise<any>[] = [];
 
 
     try {
-        console.log(`Targeting Upstash Vector Index: ${UPSTASH_VECTOR_INDEX_NAME}`);
+        // --- NO ensureRedisIndex call needed ---
         console.log(`Step 1: Starting Shopify product fetch loop (Batch Size: ${BATCH_SIZE_SHOPIFY})...`);
 
         do {
@@ -77,7 +71,8 @@ export async function GET(req: NextRequest) {
             }
             console.log(`Fetched batch of ${products.length} products in ${fetchDuration}ms. Next cursor: ${nextPageCursor ? 'Exists' : 'None'}`);
 
-            console.log(` -> Processing batch of ${products.length} products for storage...`);
+            // Process Batch: Generate Embeddings and Prepare Upserts
+            console.log(` -> Processing batch of ${products.length} products for embedding and storage...`);
             const batchStartTime = Date.now();
 
             for (const product of products) {
@@ -87,11 +82,16 @@ export async function GET(req: NextRequest) {
                         totalErrors++; continue;
                     }
 
-                    // a) Prepare text data for Upstash to embed
+                    // a) Prepare text for embedding
                     const cleanedDescription = product.bodyHtml?.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim() || '';
-                    const textDataForEmbedding = `Product: ${product.title}\nBrand: ${product.vendor || ''}\nType: ${product.productType || ''}\nTags: ${(product.tags || []).join(', ')}\nDescription: ${cleanedDescription.substring(0, 500)}`;
+                    const textToEmbed = `Product: ${product.title}\nBrand: ${product.vendor || ''}\nType: ${product.productType || ''}\nTags: ${(product.tags || []).join(', ')}\nDescription: ${cleanedDescription.substring(0, 500)}`;
 
-                    // b) NO external embedding generation needed
+                    // b) Generate embedding
+                    const embedding = await generateEmbedding(textToEmbed);
+                    if (!embedding) {
+                        console.warn(`Failed to generate embedding for product: ${product.title} (ID: ${product.id})`);
+                        totalErrors++; continue;
+                    }
 
                     // c) Prepare Vector Metadata
                     const productIdNumber = product.id.split('/').pop();
@@ -111,8 +111,9 @@ export async function GET(req: NextRequest) {
                     }
                     const tagsString = (product.tags || []).join(',');
 
+                    // Create the metadata object using our interface
                     const metadata: ProductVectorMetadata = {
-                        id: product.id,
+                        id: product.id, // Store Shopify GID in metadata
                         handle: product.handle,
                         title: product.title,
                         price: formattedPrice,
@@ -123,28 +124,29 @@ export async function GET(req: NextRequest) {
                         tags: tagsString,
                     };
 
-                    // Add to vector upsert batch with 'data' field
+                    // Add to vector upsert batch
+                    // TypeScript is now happy because ProductVectorMetadata is assignable to Dict
+                    // due to the added index signature.
                     vectorUpsertBatch.push({
-                        id: productIdNumber,
-                        data: textDataForEmbedding, // Pass the text string
-                        metadata: metadata
+                        id: productIdNumber, // Use numeric product ID as the Vector ID
+                        vector: embedding,
+                        metadata: metadata // Attach the prepared metadata
                     });
 
-                    // Optional: Prepare and batch HSET for full data in standard KV
+                    // Optional: Prepare and batch HSET for full data
                     /*
-                    if (redis) {
-                        const hashData: ProductHashData = { ...metadata, description: cleanedDescription.substring(0, 1000) };
-                        const redisKey = `${REDIS_PRODUCT_KEY_PREFIX}${productIdNumber}`;
-                        hashSetPromises.push(redis.hset(redisKey, hashData));
-                    }
+                    const hashData: ProductHashData = { ...metadata, description: cleanedDescription.substring(0, 1000) };
+                    const redisKey = `${REDIS_PRODUCT_KEY_PREFIX}${productIdNumber}`;
+                    hashSetPromises.push(redis.hset(redisKey, hashData));
                     */
 
                     totalProcessed++;
 
-                    // d) Upsert vectors (data) in batches
+                    // d) Upsert vectors in batches
                     if (vectorUpsertBatch.length >= BATCH_SIZE_VECTOR) {
-                        console.log(` -> Upserting ${vectorUpsertBatch.length} data items (for embedding) to Upstash Vector index '${UPSTASH_VECTOR_INDEX_NAME}'...`);
-                        await vectorIndex.upsert(vectorUpsertBatch); // Upsert data and metadata
+                        console.log(` -> Upserting ${vectorUpsertBatch.length} vectors to index '${UPSTASH_VECTOR_INDEX_NAME}'...`);
+                        // Use the vectorIndex client from lib/redis.ts
+                        await vectorIndex.upsert(vectorUpsertBatch); // This assignment is now valid
                         vectorUpsertBatch.length = 0; // Clear the batch
                         // Optional: await Promise.all(hashSetPromises); hashSetPromises.length = 0;
                     }
@@ -153,29 +155,24 @@ export async function GET(req: NextRequest) {
                     console.error(`Error processing product ${product.id} (${product.title}):`, productError);
                     totalErrors++;
                 }
-            } // End for loop
+            } // End for loop (processing products in fetched batch)
 
             const batchDuration = Date.now() - batchStartTime;
             console.log(` -> Finished processing batch in ${batchDuration}ms. Processed so far: ${totalProcessed}, Errors: ${totalErrors}`);
 
-        } while (nextPageCursor);
+        } while (nextPageCursor); // Continue while Shopify indicates more pages
 
-        // Upsert any remaining items
+        // Upsert any remaining vectors in the last batch
         if (vectorUpsertBatch.length > 0) {
-            console.log(` -> Upserting final ${vectorUpsertBatch.length} data items to Upstash Vector index '${UPSTASH_VECTOR_INDEX_NAME}'...`);
-            try {
-                await vectorIndex.upsert(vectorUpsertBatch);
-                // Optional: await Promise.all(hashSetPromises);
-            } catch (upsertError) {
-                 console.error(`Error upserting final batch:`, upsertError);
-                 totalErrors += vectorUpsertBatch.length;
-            }
+            console.log(` -> Upserting final ${vectorUpsertBatch.length} vectors to index '${UPSTASH_VECTOR_INDEX_NAME}'...`);
+            await vectorIndex.upsert(vectorUpsertBatch); // Also valid here
+            // Optional: await Promise.all(hashSetPromises);
         }
 
         const duration = (Date.now() - startTime) / 1000;
-        const summary = `Sync complete in ${duration.toFixed(2)}s. Total Fetched: ${totalFetched}, Successfully Processed & Attempted Upsert: ${totalProcessed}, Errors during processing/upsert: ${totalErrors}`;
+        const summary = `Sync complete in ${duration.toFixed(2)}s. Total Fetched: ${totalFetched}, Successfully Processed & Upserted: ${totalProcessed}, Errors: ${totalErrors}`;
         console.log(summary);
-        return NextResponse.json({ message: summary, processed: totalProcessed, errors: totalErrors });
+        return NextResponse.json({ message: summary });
 
     } catch (error) {
         console.error('Product Sync Error:', error);

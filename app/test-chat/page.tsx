@@ -16,10 +16,10 @@ interface ProductCardResponse {
 }
 
 interface ChatApiResponse {
-    ai_understanding?: string;
+    ai_understanding?: string; // Make optional as it might not always be present
     product_card?: ProductCardResponse;
-    advice?: string;
-    error?: string;
+    advice?: string; // Make optional
+    error?: string; // Include potential error message
 }
 
 export default function TestChatPage() {
@@ -30,7 +30,7 @@ export default function TestChatPage() {
 
     const handleQuerySelect = (query: string) => {
         setSelectedQuery(query);
-        setResult(null);
+        setResult(null); // Clear previous results when selecting a new query
         setError(null);
     };
 
@@ -46,20 +46,16 @@ export default function TestChatPage() {
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                // Send empty history for isolated query testing
                 body: JSON.stringify({ query: selectedQuery, history: [] }),
             });
 
-            // Check if response is ok before parsing
+            const data: ChatApiResponse = await response.json();
+
             if (!response.ok) {
-                 let errorMsg = `Request failed with status ${response.status}`;
-                 try {
-                     const errorData = await response.json();
-                     errorMsg = errorData.error || errorMsg;
-                 } catch { /* Ignore parsing error */ }
-                 throw new Error(errorMsg);
+                throw new Error(data.error || `Request failed with status ${response.status}`);
             }
 
-            const data: ChatApiResponse = await response.json();
             console.log("API Response:", data);
             setResult(data);
 
@@ -67,11 +63,11 @@ export default function TestChatPage() {
             console.error("Chat API test error:", err);
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
             setError(errorMessage);
-            setResult(null);
+            setResult(null); // Clear any partial results on error
         } finally {
             setLoading(false);
         }
-    }, [selectedQuery, loading]);
+    }, [selectedQuery, loading]); // Dependencies for the callback
 
     return (
         <div className="container mx-auto p-6 md:p-8 dark:bg-gray-900 dark:text-gray-100 min-h-screen">
@@ -79,7 +75,7 @@ export default function TestChatPage() {
                 Chat API Test Page
             </h1>
             <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">
-                Select a query from the list below and click "Test Query" to send it to the
+                Select a query from the list below and click &quot;Test Query&quot; to send it to the
                 <code>/api/chat</code> endpoint and view the structured response.
                 This helps validate AI understanding, advice generation, and product search relevance.
             </p>
@@ -106,7 +102,7 @@ export default function TestChatPage() {
             {selectedQuery && (
                 <div className="mb-6 p-4 border rounded-md bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">
                     <p className="text-sm font-medium mb-2">Selected Query:</p>
-                    <p className="text-sm italic mb-4">"{selectedQuery}"</p>
+                    <p className="text-sm italic mb-4">&quot;{selectedQuery}&quot;</p>
                     <button
                         onClick={handleTestQuery}
                         disabled={loading}
@@ -157,7 +153,7 @@ export default function TestChatPage() {
                     <div className="mb-4">
                         <h3 className="font-medium text-sm uppercase text-gray-500 dark:text-gray-400 mb-1">Product Card Found:</h3>
                         {result.product_card ? (
-                            <div className="max-w-md">
+                            <div className="max-w-md"> {/* Limit card width for better display */}
                                 <ProductCard {...result.product_card} />
                             </div>
                         ) : (
@@ -170,9 +166,13 @@ export default function TestChatPage() {
                     <div>
                         <h3 className="font-medium text-sm uppercase text-gray-500 dark:text-gray-400 mb-1">Advice / Response Text:</h3>
                         <div
-                            // Apply prose styles for basic HTML formatting from AI
                             className="prose prose-sm dark:prose-invert max-w-none p-3 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
+                            // Use dangerouslySetInnerHTML ONLY if you trust the AI source
+                            // and have sanitized appropriately on the backend if needed.
+                            // For simple text, just rendering is safer. If advice contains HTML:
                             dangerouslySetInnerHTML={{ __html: result.advice || '<span class="text-gray-400 dark:text-gray-500">N/A</span>' }}
+                            // Or for plain text:
+                            // <p>{result.advice || <span className="text-gray-400 dark:text-gray-500">N/A</span>}</p>
                         />
                     </div>
                 </div>
