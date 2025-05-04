@@ -3,50 +3,46 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Core Theme Variables from index.html */
 :root {
     --primary: #e91e63;
     --primary-dark: #c2185b;
     --bg-light: #ffffff;
     --bg-dark: #1f2937;
-    --text-light: #111827; /* Default Tailwind gray-900 */
-    --text-dark: #f3f4f6;  /* Default Tailwind gray-100 */
+    --text-light: #111827; /* Slightly darker default text */
+    --text-dark: #f3f4f6;
     --card-bg-light: #ffffff;
-    --card-bg-dark: #374151; /* Tailwind gray-700 */
-    --input-bg-light: #f9fafb; /* Tailwind gray-50 */
-    --input-bg-dark: #4b5563; /* Tailwind gray-600 */
-    --border-light: #e5e7eb; /* Tailwind gray-200 */
-    --border-dark: #4b5563; /* Tailwind gray-600 */
-    --bubble-user-bg: #e91e63; /* --primary */
-    --bubble-bot-bg: #f3f4f6; /* Tailwind gray-100 */
-    --bubble-bot-bg-dark: #4b5563; /* Tailwind gray-600 */
-    --match-reason-color-light: #4b5563; /* Tailwind gray-600 */
-    --match-reason-color-dark: #9ca3af; /* Tailwind gray-400 */
-    --advice-bg-light: #fdf2f8; /* Tailwind pink-50 */
-    --advice-text-light: #be185d; /* Tailwind pink-700 */
-    --advice-border-light: #fbcfe8; /* Tailwind pink-200 */
+    --card-bg-dark: #374151;
+    --input-bg-light: #f9fafb; /* Slightly adjusted */
+    --input-bg-dark: #4b5563;
+    --border-light: #e5e7eb;
+    --border-dark: #4b5563;
+    --bubble-user-bg: #e91e63;
+    --bubble-bot-bg: #f3f4f6; /* Adjusted bot bubble */
+    --bubble-bot-bg-dark: #4b5563;
+    --match-reason-color-light: #4b5563; /* Adjusted */
+    --match-reason-color-dark: #9ca3af; /* Adjusted */
+    --advice-bg-light: #fdf2f8; /* Light pink */
+    --advice-text-light: #be185d; /* Darker pink */
+    --advice-border-light: #fbcfe8; /* Lighter pink */
     --advice-bg-dark: rgba(190, 24, 93, 0.2); /* Transparent dark pink */
-    --advice-text-dark: #fda4af; /* Tailwind pink-300 */
-    --advice-border-dark: #831843; /* Tailwind pink-900 */
+    --advice-text-dark: #fda4af; /* Lighter pink text */
+    --advice-border-dark: #831843; /* Darker pink border */
 }
 
 html {
   scroll-behavior: smooth;
 }
 
-/* Base body styles */
 body {
   @apply font-sans bg-[color:var(--bg-light)] text-[color:var(--text-light)] m-0 flex flex-col min-h-screen transition-colors duration-300;
 }
 
-/* Dark mode styles applied via 'dark' class on html/body */
 body.dark {
   @apply bg-[color:var(--bg-dark)] text-[color:var(--text-dark)];
 }
 
 /* Component Base Styles using @apply */
 @layer components {
-    /* Chat Container Layout */
     .chat-container {
         @apply mx-auto my-4 w-full max-w-3xl rounded-2xl shadow-lg flex flex-col flex-grow overflow-hidden h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)];
     }
@@ -54,70 +50,67 @@ body.dark {
     body.dark .chat-container { @apply bg-card-bg-dark shadow-xl shadow-black/20; }
 
     .chat-header {
-        @apply bg-gradient-to-r from-[color:var(--primary)] to-[color:var(--primary-dark)] text-white p-3 text-center font-semibold flex-shrink-0 text-base; /* Adjusted padding/size */
+        @apply bg-gradient-to-r from-[color:var(--primary)] to-[color:var(--primary-dark)] text-white p-3 text-center font-semibold flex-shrink-0;
     }
 
     .chat-area {
-        @apply flex-grow overflow-y-auto p-4 space-y-3; /* Use space-y for consistent spacing */
+        @apply flex-grow overflow-y-auto p-4 space-y-3;
     }
-    body:not(.dark) .chat-area { @apply bg-card-bg-light; }
-    body.dark .chat-area { @apply bg-card-bg-dark; }
 
-    /* Message Bubbles */
     .message-base {
-        @apply py-3 px-5 rounded-2xl max-w-[85%] mb-1 shadow-sm leading-relaxed break-words transition-opacity duration-300 text-sm; /* Adjusted margin/size */
+        @apply py-3 px-5 rounded-2xl max-w-[85%] mb-3 shadow-sm leading-relaxed break-words transition-opacity duration-300;
     }
     .user-message {
-        @apply bg-[color:var(--bubble-user-bg)] text-white ml-auto rounded-br-lg; /* Adjusted radius */
+        @apply bg-[color:var(--bubble-user-bg)] text-white ml-auto rounded-br-md;
     }
     .bot-message {
-        @apply mr-auto rounded-bl-lg; /* Adjusted radius */
+        @apply mr-auto rounded-bl-md;
     }
     body:not(.dark) .bot-message { @apply bg-[color:var(--bubble-bot-bg)] text-text-light; }
     body.dark .bot-message { @apply bg-[color:var(--bubble-bot-bg-dark)] text-text-dark; }
 
-    /* Input Area */
     .input-area {
         @apply flex p-3 border-t items-center gap-2 flex-shrink-0;
     }
     body:not(.dark) .input-area { @apply bg-card-bg-light border-border-light; }
     body.dark .input-area { @apply bg-card-bg-dark border-border-dark; }
 
-    .chat-input {
-        @apply flex-1 py-2 px-4 border rounded-lg outline-none transition-colors text-sm w-full; /* Adjusted padding */
+    .chat-input { /* Changed ID to class for consistency */
+        @apply flex-1 py-2 px-3 border rounded-lg outline-none transition-colors text-sm w-full;
     }
     body:not(.dark) .chat-input { @apply bg-input-bg-light text-text-light border-border-light focus:border-[color:var(--primary)]; }
     body.dark .chat-input { @apply bg-input-bg-dark text-text-dark border-border-dark focus:border-[color:var(--primary)]; }
     .chat-input:focus { @apply ring-1 ring-[color:var(--primary)]; }
-    .chat-input::placeholder { @apply text-gray-400 dark:text-gray-500; } /* Combined placeholder */
-    .chat-input:disabled { @apply bg-gray-100 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed; } /* Combined disabled */
+    .chat-input::placeholder { @apply text-gray-400; }
+    body.dark .chat-input::placeholder { @apply text-gray-500; }
+    .chat-input:disabled { @apply bg-gray-100 cursor-not-allowed; }
+    body.dark .chat-input:disabled { @apply bg-gray-700 cursor-not-allowed text-gray-400; }
 
-    /* Buttons */
     .icon-button {
         @apply bg-[color:var(--primary)] text-white border-none rounded-full w-9 h-9 flex items-center justify-center cursor-pointer transition-all duration-200 flex-shrink-0;
     }
-    .icon-button:hover:not(:disabled) { @apply bg-[color:var(--primary-dark)] scale-105; } /* Adjusted hover scale */
-    .icon-button:disabled { @apply bg-gray-300 dark:bg-gray-600 dark:text-gray-400 cursor-not-allowed scale-100; } /* Combined disabled */
+    .icon-button:hover:not(:disabled) { @apply bg-[color:var(--primary-dark)] scale-110; }
+    .icon-button:disabled { @apply bg-gray-300 cursor-not-allowed scale-100; }
+    body.dark .icon-button:disabled { @apply bg-gray-600 text-gray-400; }
 
     .theme-toggle { @apply bg-gray-200 text-gray-700; }
     body.dark .theme-toggle { @apply bg-input-bg-dark text-text-dark; }
     .theme-toggle:hover { @apply bg-[color:var(--primary)] text-white; }
 
-    /* Product Card */
     .product-card {
         @apply flex items-center rounded-lg overflow-hidden shadow-md transition-transform duration-200 my-2 no-underline border cursor-pointer max-w-full;
     }
     body:not(.dark) .product-card { @apply bg-card-bg-light border-border-light text-text-light; }
-    body.dark .product-card { @apply bg-gray-700 border-border-dark text-text-dark; } /* Adjusted dark bg */
-    .product-card:hover { @apply transform -translate-y-px shadow-lg; } /* Subtle hover */
+    body.dark .product-card { @apply bg-gray-600 border-border-dark text-text-dark; }
+    .product-card:hover { @apply transform -translate-y-0.5 shadow-lg; }
 
     .product-image-container { @apply w-20 h-20 flex-shrink-0 m-2 rounded-lg overflow-hidden flex items-center justify-center; }
     body:not(.dark) .product-image-container { @apply bg-gray-100; }
-    body.dark .product-image-container { @apply bg-gray-800; } /* Darker image bg */
+    body.dark .product-image-container { @apply bg-gray-700; }
     .product-image { @apply w-full h-full object-cover; }
     .image-placeholder { @apply text-3xl; }
     body:not(.dark) .image-placeholder { @apply text-gray-400; }
-    body.dark .image-placeholder { @apply text-gray-500; }
+    body.dark .image-placeholder { @apply text-gray-300; }
 
     .product-info { @apply p-2 pl-3 flex-grow min-w-0; }
     .product-name { @apply font-semibold text-sm mb-1 truncate; }
@@ -126,7 +119,6 @@ body.dark {
     body.dark .product-description { @apply text-gray-300; }
     .product-price { @apply font-semibold text-xs text-[color:var(--primary)]; }
 
-    /* AI Understanding & Advice */
     .advice-text {
         @apply text-sm italic mt-2 p-3 rounded-md border;
     }
@@ -139,35 +131,16 @@ body.dark {
     body:not(.dark) .ai-understanding-text { @apply text-gray-500; }
     body.dark .ai-understanding-text { @apply text-gray-400; }
 
-    /* Example Chips */
-    .examples-container {
-        @apply flex flex-wrap gap-2 p-3 pt-1; /* Adjusted padding */
-    }
     .example-chip {
-        @apply py-1.5 px-4 border border-[color:var(--primary)] rounded-full cursor-pointer transition-all duration-200 text-xs hover:bg-[color:var(--primary)] hover:text-white hover:scale-105 focus:outline-none focus:ring-1 focus:ring-[color:var(--primary)] focus:ring-offset-1; /* Adjusted size/focus */
+        @apply py-2 px-4 border border-[color:var(--primary)] rounded-full cursor-pointer transition-all duration-200 text-sm hover:bg-[color:var(--primary)] hover:text-white hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)] focus:ring-offset-2;
     }
     body:not(.dark) .example-chip { @apply text-text-light; }
     body.dark .example-chip { @apply border-[color:var(--primary-dark)] hover:bg-[color:var(--primary-dark)] text-text-dark hover:text-white; }
 
-    /* Typing Indicator */
     .typing-indicator {
         @apply flex items-center space-x-1;
     }
     .typing-dot {
-        @apply w-1.5 h-1.5 bg-current rounded-full; /* Adjusted size */
+        @apply w-2 h-2 bg-current rounded-full;
     }
-
-    /* Footer */
-    .footer {
-         @apply text-center text-xs py-3;
-    }
-     body:not(.dark) .footer { @apply text-gray-500; }
-     body.dark .footer { @apply text-gray-400; }
-
-}
-
-/* Keyframes (if needed beyond Tailwind defaults) */
-@keyframes bounce {
-   0%, 100% { transform: translateY(0); }
-   50% { transform: translateY(-4px); } /* Adjusted bounce height */
 }

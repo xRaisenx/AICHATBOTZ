@@ -9,6 +9,8 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+/.next
+/.vercel
 
 # testing
 /coverage
@@ -41,3 +43,4 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+.env*.local
