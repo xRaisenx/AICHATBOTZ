@@ -1,29 +1,29 @@
 // app/api/products/sync/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-// vectorIndex now points to the dedicated Upstash Vector DB
 import { vectorIndex, UPSTASH_VECTOR_INDEX_NAME } from '@/lib/redis';
-// Import 'redis' client only if you uncomment the HSET logic below
+// Removed unused ShopifyProductNode import as it's defined in lib/shopify.ts
+import { fetchShopifyProducts } from '@/lib/shopify';
+import { generateEmbedding } from '@/lib/gemini';
+// Import only if using HSET separately
 // import { redis, REDIS_PRODUCT_KEY_PREFIX } from '@/lib/redis';
-import { fetchShopifyProducts, ShopifyProductNode } from '@/lib/shopify';
-// REMOVE Gemini embedding import: import { generateEmbedding } from '@/lib/gemini';
 
 // Define the metadata structure to store alongside the vector
 interface ProductVectorMetadata {
     [key: string]: any; // Index signature for compatibility
-    id: string; // Shopify GID
+    id: string;
     handle: string;
     title: string;
-    price: string; // Formatted price
+    price: string;
     imageUrl: string | null;
     productUrl: string;
     vendor?: string | null;
     productType?: string | null;
-    tags?: string; // Comma-separated tags
+    tags?: string;
 }
 
 // Optional: Structure for storing full details in a separate HASH
 // interface ProductHashData extends ProductVectorMetadata {
-//     description: string; // Store full (cleaned) description here
+//     description: string;
 // }
 
 
@@ -47,9 +47,8 @@ export async function GET(req: NextRequest) {
     let nextPageCursor: string | null = null;
     const startTime = Date.now();
     const BATCH_SIZE_SHOPIFY = 50;
-    const BATCH_SIZE_VECTOR = 100; // Batch size for Upstash Vector upsert
+    const BATCH_SIZE_VECTOR = 100;
 
-    // CORRECTED TYPE: Batch now contains 'data' instead of 'vector'
     const vectorUpsertBatch: {
         id: string | number;
         data: string; // Text to be embedded by Upstash
@@ -57,12 +56,10 @@ export async function GET(req: NextRequest) {
     }[] = [];
 
     // Optional: Store hash set promises for batching
-    // const hashSetPromises: Promise<any>[] = [];
+    // const hashSetPromises: Promise<unknown>[] = []; // Use unknown instead of any
 
 
     try {
-        // Index should be created manually in Upstash Vector Console beforehand
-        // and configured with an embedding model.
         console.log(`Targeting Upstash Vector Index: ${UPSTASH_VECTOR_INDEX_NAME}`);
         console.log(`Step 1: Starting Shopify product fetch loop (Batch Size: ${BATCH_SIZE_SHOPIFY})...`);
 
@@ -92,8 +89,7 @@ export async function GET(req: NextRequest) {
 
                     // a) Prepare text data for Upstash to embed
                     const cleanedDescription = product.bodyHtml?.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim() || '';
-                    // Combine fields into a single string for embedding
-                    const textDataForEmbedding = `Product: ${product.title}\nBrand: ${product.vendor || ''}\nType: ${product.productType || ''}\nTags: ${(product.tags || []).join(', ')}\nDescription: ${cleanedDescription.substring(0, 500)}`; // Limit description length
+                    const textDataForEmbedding = `Product: ${product.title}\nBrand: ${product.vendor || ''}\nType: ${product.productType || ''}\nTags: ${(product.tags || []).join(', ')}\nDescription: ${cleanedDescription.substring(0, 500)}`;
 
                     // b) NO external embedding generation needed
 

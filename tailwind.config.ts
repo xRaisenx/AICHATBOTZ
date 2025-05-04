@@ -57,7 +57,7 @@ const config: Config = {
        animation: {
          bounce: 'bounce 0.6s infinite ease-in-out',
        },
-       typography: ({ theme }: { theme: any }) => ({
+       typography: ({ theme }: { theme: any }) => ({ // Keep 'any' here as theme structure is complex
          DEFAULT: {
            css: {
              '--tw-prose-body': theme('colors.text-light'),
@@ -72,19 +72,10 @@ const config: Config = {
                   color: theme('colors.primary-dark'),
                 },
               },
-             // Add styles for lists within prose if needed
-             'ul > li::marker': { // Example: Change marker color
-                color: theme('colors.primary'),
-             },
-             'ol > li::marker': {
-                color: theme('colors.primary'),
-             },
-             '--tw-prose-invert-ul > li::marker': { // Dark mode markers
-                color: theme('colors.primary'),
-             },
-             '--tw-prose-invert-ol > li::marker': {
-                color: theme('colors.primary'),
-             },
+             'ul > li::marker': { color: theme('colors.primary') },
+             'ol > li::marker': { color: theme('colors.primary') },
+             '--tw-prose-invert-ul > li::marker': { color: theme('colors.primary') },
+             '--tw-prose-invert-ol > li::marker': { color: theme('colors.primary') },
            },
          },
        }),

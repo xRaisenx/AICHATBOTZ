@@ -1,5 +1,5 @@
 // lib/shopify.ts
-import { error } from "console";
+// Removed unused 'error' import from 'console'
 
 // Define interfaces for the expected GraphQL response structure
 interface ShopifyImage {
@@ -12,7 +12,7 @@ interface ShopifyPrice {
     currencyCode: string;
 }
 
-export interface ShopifyProductNode { // Export for use in sync route
+export interface ShopifyProductNode {
     id: string;
     handle: string;
     title: string;
@@ -44,15 +44,16 @@ interface ShopifyProductsConnection {
 }
 
 interface ShopifyGraphQLResponse {
-    data?: { // Make data optional to handle errors better
+    data?: {
         products: ShopifyProductsConnection;
     };
-    extensions?: any;
-    errors?: Array<{ message: string; extensions?: { code?: string } }>; // Include error code
+    // Use a more general type for extensions if specific structure isn't needed
+    extensions?: Record<string, unknown>;
+    errors?: Array<{ message: string; extensions?: { code?: string } }>;
 }
 
 // --- Fetch Products Function ---
-const SHOPIFY_API_VERSION = '2024-04'; // Use a recent, stable version
+const SHOPIFY_API_VERSION = '2024-04';
 
 export interface FetchResult {
     products: ShopifyProductNode[];
@@ -61,7 +62,7 @@ export interface FetchResult {
 
 export async function fetchShopifyProducts(
     cursor: string | null = null,
-    limit: number = 50 // Number of products per page
+    limit: number = 50
 ): Promise<FetchResult> {
 
     const storeDomain = process.env.SHOPIFY_STORE_NAME;
@@ -130,33 +131,27 @@ export async function fetchShopifyProducts(
             cache: 'no-store',
         });
 
-        // Improved error handling
         if (!response.ok) {
             let errorBody = `Shopify API request failed with status ${response.status}`;
-            try {
-                const textBody = await response.text();
-                errorBody += `\nResponse: ${textBody.substring(0, 500)}`; // Log part of the response
-            } catch { /* Ignore if reading body fails */ }
+            try { const textBody = await response.text(); errorBody += `\nResponse: ${textBody.substring(0, 500)}`; }
+            catch { /* Ignore */ }
             console.error(errorBody);
             throw new Error(`Shopify API request failed with status ${response.status}`);
         }
 
         const jsonResponse: ShopifyGraphQLResponse = await response.json();
 
-        // Handle GraphQL level errors
         if (jsonResponse.errors) {
             console.error("Shopify GraphQL Errors:", JSON.stringify(jsonResponse.errors, null, 2));
-            // Check for specific errors like rate limiting (ACCESS_DENIED might indicate throttling)
             const isRateLimited = jsonResponse.errors.some(e => e.extensions?.code === 'THROTTLED');
             if (isRateLimited) {
-                console.warn("Shopify API rate limit likely hit. Consider adding delays or reducing batch size.");
-                // Optionally throw a specific error or return an empty result to retry later
+                console.warn("Shopify API rate limit likely hit.");
             }
             throw new Error(`Shopify GraphQL Error: ${jsonResponse.errors[0]?.message || 'Unknown GraphQL error'}`);
         }
 
         if (!jsonResponse.data?.products?.edges) {
-             console.error("Invalid response structure from Shopify (missing data.products.edges):", jsonResponse);
+             console.error("Invalid response structure from Shopify:", jsonResponse);
              throw new Error("Received invalid data structure from Shopify API.");
         }
 
@@ -173,6 +168,6 @@ export async function fetchShopifyProducts(
 
     } catch (err) {
         console.error("Error during Shopify fetch:", err);
-        throw err; // Re-throw
+        throw err;
     }
 }

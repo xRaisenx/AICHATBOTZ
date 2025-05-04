@@ -16,10 +16,10 @@ interface ProductCardResponse {
 }
 
 interface ChatApiResponse {
-    ai_understanding?: string; // Make optional as it might not always be present
+    ai_understanding?: string;
     product_card?: ProductCardResponse;
-    advice?: string; // Make optional
-    error?: string; // Include potential error message
+    advice?: string;
+    error?: string;
 }
 
 export default function TestChatPage() {
@@ -30,7 +30,7 @@ export default function TestChatPage() {
 
     const handleQuerySelect = (query: string) => {
         setSelectedQuery(query);
-        setResult(null); // Clear previous results when selecting a new query
+        setResult(null);
         setError(null);
     };
 
@@ -46,16 +46,20 @@ export default function TestChatPage() {
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // Send empty history for isolated query testing
                 body: JSON.stringify({ query: selectedQuery, history: [] }),
             });
 
-            const data: ChatApiResponse = await response.json();
-
+            // Check if response is ok before parsing
             if (!response.ok) {
-                throw new Error(data.error || `Request failed with status ${response.status}`);
+                 let errorMsg = `Request failed with status ${response.status}`;
+                 try {
+                     const errorData = await response.json();
+                     errorMsg = errorData.error || errorMsg;
+                 } catch { /* Ignore parsing error */ }
+                 throw new Error(errorMsg);
             }
 
+            const data: ChatApiResponse = await response.json();
             console.log("API Response:", data);
             setResult(data);
 
@@ -63,11 +67,11 @@ export default function TestChatPage() {
             console.error("Chat API test error:", err);
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
             setError(errorMessage);
-            setResult(null); // Clear any partial results on error
+            setResult(null);
         } finally {
             setLoading(false);
         }
-    }, [selectedQuery, loading]); // Dependencies for the callback
+    }, [selectedQuery, loading]);
 
     return (
         <div className="container mx-auto p-6 md:p-8 dark:bg-gray-900 dark:text-gray-100 min-h-screen">
@@ -153,7 +157,7 @@ export default function TestChatPage() {
                     <div className="mb-4">
                         <h3 className="font-medium text-sm uppercase text-gray-500 dark:text-gray-400 mb-1">Product Card Found:</h3>
                         {result.product_card ? (
-                            <div className="max-w-md"> {/* Limit card width for better display */}
+                            <div className="max-w-md">
                                 <ProductCard {...result.product_card} />
                             </div>
                         ) : (
@@ -166,13 +170,9 @@ export default function TestChatPage() {
                     <div>
                         <h3 className="font-medium text-sm uppercase text-gray-500 dark:text-gray-400 mb-1">Advice / Response Text:</h3>
                         <div
+                            // Apply prose styles for basic HTML formatting from AI
                             className="prose prose-sm dark:prose-invert max-w-none p-3 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
-                            // Use dangerouslySetInnerHTML ONLY if you trust the AI source
-                            // and have sanitized appropriately on the backend if needed.
-                            // For simple text, just rendering is safer. If advice contains HTML:
                             dangerouslySetInnerHTML={{ __html: result.advice || '<span class="text-gray-400 dark:text-gray-500">N/A</span>' }}
-                            // Or for plain text:
-                            // <p>{result.advice || <span className="text-gray-400 dark:text-gray-500">N/A</span>}</p>
                         />
                     </div>
                 </div>

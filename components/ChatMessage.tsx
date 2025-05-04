@@ -57,7 +57,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
        return (
          // Apply base message styles + bot styles + specific error styling
          <div className={`message-base bot-message bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300`}>
-            <p className="font-medium">Oops!</p>
+            <p className={"font-medium"}>Oops!</p>
             {/* Display sanitized error text */}
             {sanitizedText && <div dangerouslySetInnerHTML={{ __html: sanitizedText }} />}
          </div>
@@ -70,7 +70,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
     <div className={`message-base ${isUser ? 'user-message' : 'bot-message'}`}>
       {/* Render AI Understanding (only for bot messages) */}
       {!isUser && message.ai_understanding && (
-        <p className="ai-understanding-text">{message.ai_understanding}</p> // Applied via @layer components
+        <p className={"ai-understanding-text"}>{message.ai_understanding}</p> // Applied via @layer components
       )}
 
       {/* Render user's query text directly (no sanitization needed) */}

@@ -1,9 +1,8 @@
 // app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-// Import vectorIndex for querying
 import { vectorIndex, UPSTASH_VECTOR_INDEX_NAME } from '@/lib/redis';
-// Import only Gemini for understanding/advice, NOT for embedding
-import { callGeminiForUnderstanding, GeminiResponse } from '@/lib/gemini';
+// Removed unused GeminiResponse import
+import { generateEmbedding, callGeminiForUnderstanding } from '@/lib/gemini';
 import { Content } from '@google/generative-ai';
 import { QueryResult } from '@upstash/vector';
 
@@ -37,13 +36,21 @@ interface ChatApiResponse {
     advice: string;
 }
 
+// Type for incoming history messages from the client
+interface ClientHistoryMessage {
+    role: 'user' | 'bot' | 'model'; // Allow 'model' role from client if needed, map later
+    text?: string;
+    // Add other potential fields from client if necessary, but filter before sending to Gemini
+}
+
 
 export async function POST(req: NextRequest) {
   let searchNote = "";
 
   try {
-    const body = await req.json();
-    const { query, history = [] } = body as { query: string; history: Array<{ role: 'user' | 'bot' | 'model', text?: string }> };
+    // Use specific type for request body
+    const body = await req.json() as { query: string; history?: ClientHistoryMessage[] };
+    const { query, history = [] } = body; // Default history to empty array
 
     if (!query || typeof query !== 'string' || query.trim().length === 0) {
       return NextResponse.json({ error: 'Invalid query provided' }, { status: 400 });
@@ -51,10 +58,12 @@ export async function POST(req: NextRequest) {
     const trimmedQuery = query.trim();
     console.log(`Processing query: "${trimmedQuery}"`);
 
+    // Prepare history for Gemini, ensuring correct structure and filtering
     const geminiHistory: Content[] = history
-        .filter(msg => msg.text && msg.text.trim().length > 0)
+        .filter(msg => msg.text && msg.text.trim().length > 0) // Ensure text exists
         .map(msg => ({
-            role: msg.role === 'bot' ? 'model' : 'user',
+            // Map client roles ('bot') to Gemini roles ('model')
+            role: msg.role === 'bot' ? 'model' : 'user', // Assume only user/bot from client
             parts: [{ text: msg.text as string }],
         }));
 
@@ -73,28 +82,27 @@ export async function POST(req: NextRequest) {
 
     let finalProductCard: ProductCardResponse | undefined = undefined;
     const K = 1;
-    const SIMILARITY_THRESHOLD = 1.5; // Threshold for Upstash's model similarity
+    const SIMILARITY_THRESHOLD = 0.70;
 
-    // Helper function to perform the vector query using 'data' field
-    const performVectorQuery = async (searchText: string): Promise<QueryResult<ProductVectorMetadata> | null> => {
-        if (!searchText || searchText.trim().length === 0) {
-            console.log("No search text provided for vector query.");
+    // Helper function to perform the vector query
+    const performVectorQuery = async (embedding: number[] | null): Promise<QueryResult<ProductVectorMetadata> | null> => {
+        if (!embedding) {
+            console.log("No embedding provided for vector query.");
             return null;
         }
         try {
-            console.log(`Querying vector index '${UPSTASH_VECTOR_INDEX_NAME}' with data: "${searchText.substring(0, 70)}..."`);
-            // *** USE vectorIndex.query with 'data' ***
-            const results = await vectorIndex.query({
-                data: searchText, // Pass the text for Upstash to embed
+            console.log(`Querying vector index '${UPSTASH_VECTOR_INDEX_NAME}' with embedding (first 5 values): ${embedding.slice(0, 5)}...`);
+            const results = await vectorIndex.query<ProductVectorMetadata>({ // Add type parameter here
+                vector: embedding,
                 topK: K,
-                includeMetadata: true, // Get the product details
+                includeMetadata: true,
             });
             if (results && results.length > 0) {
                  console.log(` -> Top match ID: ${results[0].id}, Score: ${results[0].score.toFixed(4)}, Metadata: ${results[0].metadata ? 'Present' : 'Missing'}`);
             } else {
                  console.log(" -> No results found for this vector query.");
             }
-            return results?.[0] as QueryResult<ProductVectorMetadata> || null;
+            return results?.[0] || null;
         } catch (error) {
             console.error(`Upstash Vector Query Error for index '${UPSTASH_VECTOR_INDEX_NAME}':`, error);
             searchNote = "\n(Note: There was an issue searching for products.)";
@@ -106,43 +114,53 @@ export async function POST(req: NextRequest) {
     let topMatch: QueryResult<ProductVectorMetadata> | null = null;
     let searchStageUsed = "None";
 
-    // Stage 1: Search using AI Keywords (if available)
-    if (geminiResult.search_keywords.trim().length > 0) {
+    const keywordEmbedding = geminiResult.search_keywords.trim().length > 0
+        ? await generateEmbedding(geminiResult.search_keywords)
+        : null;
+
+    if (keywordEmbedding) {
         console.log("Attempting search with AI keywords...");
-        topMatch = await performVectorQuery(geminiResult.search_keywords);
+        topMatch = await performVectorQuery(keywordEmbedding);
         searchStageUsed = "AI Keywords";
     } else {
         console.log("Skipping keyword search as AI keywords are empty.");
     }
 
-    // Stage 2: Search using Direct Query (if Stage 1 failed or below threshold)
     if (!topMatch || topMatch.score < SIMILARITY_THRESHOLD) {
         const logReason = !topMatch ? "Keyword search yielded no result or was skipped" : `Keyword search score (${topMatch.score.toFixed(4)}) below threshold ${SIMILARITY_THRESHOLD}`;
         console.log(`${logReason}. Attempting search with direct query...`);
 
-        const directMatch = await performVectorQuery(trimmedQuery); // Use direct query text
-        searchStageUsed = "Direct Query";
+        const directQueryEmbedding = await generateEmbedding(trimmedQuery);
 
-        if (directMatch && directMatch.score >= SIMILARITY_THRESHOLD) {
-            if (!topMatch || directMatch.score > topMatch.score) {
-                console.log(`Direct query search found a better match (Score: ${directMatch.score.toFixed(4)})`);
-                topMatch = directMatch;
+        if (directQueryEmbedding) {
+            const directMatch = await performVectorQuery(directQueryEmbedding);
+            searchStageUsed = "Direct Query";
+
+            if (directMatch && directMatch.score >= SIMILARITY_THRESHOLD) {
+                if (!topMatch || directMatch.score > topMatch.score) {
+                    console.log(`Direct query search found a better match (Score: ${directMatch.score.toFixed(4)})`);
+                    topMatch = directMatch;
+                } else {
+                    console.log(`Direct query match (Score: ${directMatch.score.toFixed(4)}) was not better than keyword match (Score: ${topMatch.score.toFixed(4)}). Keeping keyword match.`);
+                    searchStageUsed = "AI Keywords (Kept)";
+                }
+            } else if (topMatch) {
+                 console.log(`Direct query search did not yield a result above threshold. Keeping keyword result (Score: ${topMatch.score.toFixed(4)})`);
+                 searchStageUsed = "AI Keywords (Kept)";
             } else {
-                console.log(`Direct query match (Score: ${directMatch.score.toFixed(4)}) was not better than keyword match (Score: ${topMatch.score.toFixed(4)}). Keeping keyword match.`);
-                searchStageUsed = "AI Keywords (Kept)";
+                 console.log("Direct query search also failed or was below threshold.");
+                 searchStageUsed = "Direct Query (Failed)";
             }
-        } else if (topMatch) {
-             console.log(`Direct query search did not yield a result above threshold. Keeping keyword result (Score: ${topMatch.score.toFixed(4)})`);
-             searchStageUsed = "AI Keywords (Kept)";
         } else {
-             console.log("Direct query search also failed or was below threshold.");
-             searchStageUsed = "Direct Query (Failed)";
+            console.log("Skipped direct query search as embedding generation failed.");
+             searchStageUsed = topMatch ? "AI Keywords (Kept)" : "None";
         }
     }
 
     // --- Process the final topMatch ---
     if (topMatch && topMatch.metadata && topMatch.score >= SIMILARITY_THRESHOLD) {
-        const productData = topMatch.metadata;
+        // Ensure metadata is treated as the correct type
+        const productData = topMatch.metadata as ProductVectorMetadata;
         console.log(`Final Match Found (using ${searchStageUsed}): "${productData.title}", Score: ${topMatch.score.toFixed(4)}`);
 
         finalProductCard = {
@@ -155,13 +173,14 @@ export async function POST(req: NextRequest) {
         searchNote = ""; // Clear notes on success
 
     } else {
-        if (topMatch) {
-            console.log(`Best match found (using ${searchStageUsed}) was below threshold: "${topMatch.metadata?.title}", Score: ${topMatch.score.toFixed(4)}`);
+        if (topMatch?.metadata) { // Check if metadata exists even if below threshold
+            console.log(`Best match found (using ${searchStageUsed}) was below threshold: "${topMatch.metadata.title}", Score: ${topMatch.score.toFixed(4)}`);
             searchNote = "\n(I found something similar, but wasn't sure if it was the best match. Could you be more specific?)";
         } else {
             console.log(`No matching products found above threshold after ${searchStageUsed} stage.`);
-            // Add note only if a search was actually attempted
-            if (geminiResult.search_keywords.trim().length > 0 || trimmedQuery.length > 0) {
+            // Check if search was possible before adding note
+            const searchAttempted = keywordEmbedding || (await generateEmbedding(trimmedQuery));
+            if (searchAttempted) {
                  searchNote = "\n(I couldn't find specific products matching your request in the catalog right now.)";
             }
         }
